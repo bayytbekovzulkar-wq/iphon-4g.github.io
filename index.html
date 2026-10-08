@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbershop Street</title>
+    <!-- Tailwind CSS (для дизайна) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React (для логики сайта) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel (для чтения JSX в браузере) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* Плавная прокрутка и стилизация скролла */
+        html { scroll-behavior: smooth; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-zinc-950 text-white min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- ВСТРОЕННЫЕ ИКОНКИ ---
+        const Icon = ({ children, className = "w-6 h-6" }) => (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+        );
+        const Scissors = ({className}) => <Icon className={className}><path d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2-2m-2 2l-7 7m0-14l7 7m0 0l-2 2"/></Icon>;
+        const CalendarIcon = ({className}) => <Icon className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></Icon>;
+        const Clock = ({className}) => <Icon className={className}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Icon>;
+        const MapPin = ({className}) => <Icon className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></Icon>;
+        const Shield = ({className}) => <Icon className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Icon>;
+        const X = ({className}) => <Icon className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>;
+        const CheckCircle2 = ({className}) => <Icon className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Icon>;
+        const Trash2 = ({className}) => <Icon className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></Icon>;
+        const LogOut = ({className}) => <Icon className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Icon>;
+        const MenuIcon = ({className}) => <Icon className={className}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></Icon>;
+
+        // --- ГЛАВНОЕ ПРИЛОЖЕНИЕ ---
+        const App = () => {
+            const [step, setStep] = useState(1);
+            const [selectedDate, setSelectedDate] = useState("");
+            const [selectedTime, setSelectedTime] = useState("");
+            const [clientName, setClientName] = useState("");
+            const [clientPhone, setClientPhone] = useState("");
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            
+            const [showAdmin, setShowAdmin] = useState(false);
+            const [adminPassword, setAdminPassword] = useState("");
+            const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+            const [appointments, setAppointments] = useState([]);
+
+            // Загрузка записей из памяти браузера (вместо базы данных)
+            useEffect(() => {
+                const saved = localStorage.getItem('barbershop_appointments');
+                if (saved) {
+                    setAppointments(JSON.parse(saved));
+                }
+            }, []);
+
+            // Генерация времени (с 10:00 до 21:30) с исключением обеда (12:00 - 13:00)
+            const generateTimeSlots = () => {
+                const slots = [];
+                for (let hour = 10; hour < 21; hour++) {
+                    ['00', '30'].forEach(minute => {
+                        const timeString = `${hour}:${minute}`;
+                        if (timeString !== '12:00' && timeString !== '12:30') {
+                            slots.push(timeString);
+                        }
+                    });
+                }
+                return slots;
+            };
+
+            const allTimeSlots = generateTimeSlots();
+
+            // Проверка занятых слотов
+            const isSlotBooked = (date, time) => {
+                return appointments.some(app => app.date === date && app.time === time);
+            };
+
+            // Сохранение новой записи
+            const handleBooking = () => {
+                if (!selectedDate || !selectedTime || !clientName || !clientPhone) return;
+                
+                const newBooking = {
+                    id: Date.now().toString(),
+                    date: selectedDate,
+                    time: selectedTime,
+                    clientName,
+                    clientPhone,
+                    createdAt: new Date().toISOString()
+                };
+
+                const updatedAppointments = [...appointments, newBooking];
+                setAppointments(updatedAppointments);
+                localStorage.setItem('barbershop_appointments', JSON.stringify(updatedAppointments));
+                setStep(4);
+            };
+
+            // Удаление записи админом
+            const handleDelete = (id) => {
+                if (confirm("Точно удалить эту запись?")) {
+                    const updated = appointments.filter(app => app.id !== id);
+                    setAppointments(updated);
+                    localStorage.setItem('barbershop_appointments', JSON.stringify(updated));
+                }
+            };
+
+            const handleAdminLogin = (e) => {
+                e.preventDefault();
+                if (adminPassword === "admin123") {
+                    setIsAdminAuthenticated(true);
+                } else {
+                    alert("Неверный пароль");
+                }
+            };
+
+            // --- ПАНЕЛЬ АДМИНА ---
+            if (showAdmin) {
+                if (!isAdminAuthenticated) {
+                    return (
+                        <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-4">
+                            <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800 w-full max-w-md">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-white">Вход в панель</h2>
+                                    <button onClick={() => setShowAdmin(false)} className="text-zinc-400 hover:text-white">
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                <form onSubmit={handleAdminLogin} className="space-y-4">
+                                    <input 
+                                        type="password" 
+                                        placeholder="Введите пароль" 
+                                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-4 text-white focus:outline-none focus:border-yellow-500"
+                                        value={adminPassword}
+                                        onChange={(e) => setAdminPassword(e.target.value)}
+                                    />
+                                    <button type="submit" className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 rounded-lg transition-colors">
+                                        Войти
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8">
+                        <div className="max-w-6xl mx-auto">
+                            <div className="flex justify-between items-center mb-8 bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+                                <div>
+                                    <h1 className="text-2xl font-bold text-yellow-500">Barbershop Street</h1>
+                                    <p className="text-zinc-400">Панель управления записями</p>
+                                </div>
+                                <button onClick={() => { setShowAdmin(false); setIsAdminAuthenticated(false); setAdminPassword(""); }} 
+                                        className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition">
+                                    <LogOut className="w-4 h-4" /> Выйти на сайт
+                                </button>
+                            </div>
+
+                            <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-zinc-800/50">
+                                            <tr>
+                                                <th className="p-4 text-zinc-400 font-medium">Дата и Время</th>
+                                                <th className="p-4 text-zinc-400 font-medium">Клиент</th>
+                                                <th className="p-4 text-zinc-400 font-medium">Телефон</th>
+                                                <th className="p-4 text-zinc-400 font-medium">Услуга</th>
+                                                <th className="p-4 text-zinc-400 font-medium text-right">Действия</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-800">
+                                            {appointments.sort((a,b) => new Date(a.date) - new Date(b.date)).map((app) => (
+                                                <tr key={app.id} className="hover:bg-zinc-800/30 transition">
+                                                    <td className="p-4">
+                                                        <div className="font-semibold text-white">{app.date}</div>
+                                                        <div className="text-yellow-500">{app.time}</div>
+                                                    </td>
+                                                    <td className="p-4 font-medium">{app.clientName}</td>
+                                                    <td className="p-4 text-zinc-300">{app.clientPhone}</td>
+                                                    <td className="p-4 text-zinc-400">Стрижка (400 сом)</td>
+                                                    <td className="p-4 text-right">
+                                                        <button onClick={() => handleDelete(app.id)} className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition">
+                                                            <Trash2 className="w-5 h-5" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {appointments.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="5" className="p-8 text-center text-zinc-500">Нет активных записей</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- КЛИЕНТСКИЙ САЙТ ---
+            return (
+                <div className="font-sans relative">
+                    {/* Header */}
+                    <nav className="fixed w-full z-50 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-900">
+                        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+                            <div className="text-2xl font-black tracking-tighter text-white">
+                                BARBERSHOP<span className="text-yellow-600">STREET</span>
+                            </div>
+                            
+                            <div className="hidden md:flex items-center gap-8">
+                                <a href="#about" className="text-zinc-400 hover:text-white transition">О нас</a>
+                                <a href="#contacts" className="text-zinc-400 hover:text-white transition">Контакты</a>
+                                <button onClick={() => setShowAdmin(true)} className="flex items-center gap-2 text-zinc-500 hover:text-yellow-600 transition">
+                                    <Shield className="w-4 h-4" /> Админ
+                                </button>
+                            </div>
+                            
+                            <button className="md:hidden text-white" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+                                {isMenuOpen ? <X /> : <MenuIcon />}
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* Мобильное меню */}
+                    {isMenuOpen && (
+                        <div className="fixed inset-0 z-40 bg-zinc-950 pt-24 px-6 md:hidden">
+                            <div className="flex flex-col gap-6 text-xl">
+                                <a href="#about" onClick={() => setIsMenuOpen(false)}>О нас</a>
+                                <a href="#contacts" onClick={() => setIsMenuOpen(false)}>Контакты</a>
+                                <button onClick={() => {setIsMenuOpen(false); setShowAdmin(true);}} className="text-yellow-600 flex items-center gap-2">
+                                    <Shield className="w-5 h-5" /> Вход для администратора
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Hero Section */}
+                    <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 px-6">
+                        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center">
+                            <div>
+                                <h1 className="text-5xl md:text-7xl font-black uppercase leading-tight mb-6">
+                                    Стиль начинается <br />с <span className="text-yellow-600 text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-yellow-400">деталей</span>
+                                </h1>
+                                <p className="text-lg text-zinc-400 mb-10 max-w-md">
+                                    Премиальная стрижка без лишних слов. Одно кресло, один мастер, идеальный результат.
+                                </p>
+                                
+                                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md mb-8">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-xl font-bold">Мужская стрижка</h3>
+                                        <span className="text-2xl font-black text-yellow-600">400 сом</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-zinc-500 text-sm">
+                                        <Clock className="w-4 h-4" /> 30 минут
+                                    </div>
+                                </div>
+                                <a href="#booking" className="inline-block bg-white text-black font-bold text-lg px-8 py-4 rounded-xl hover:bg-yellow-500 hover:text-white transition-all transform hover:scale-105">
+                                    Записаться онлайн
+                                </a>
+                            </div>
+                            
+                            <div className="relative">
+                                <div className="absolute inset-0 bg-gradient-to-tr from-yellow-600/20 to-transparent rounded-3xl blur-2xl"></div>
+                                <img src="https://images.unsplash.com/photo-1599351431202-1e0f0137899a?q=80&w=800&auto=format&fit=crop" 
+                                     alt="Barbershop" className="relative rounded-3xl w-full h-[600px] object-cover border border-zinc-800" />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Блок Записи */}
+                    <section id="booking" className="py-20 px-6 bg-zinc-900">
+                        <div className="max-w-3xl mx-auto">
+                            <div className="text-center mb-12">
+                                <h2 className="text-4xl font-black mb-4 uppercase">Бронирование</h2>
+                                <p className="text-zinc-400">Выберите удобное время для стрижки</p>
+                            </div>
+
+                            <div className="bg-zinc-950 p-6 md:p-10 rounded-3xl border border-zinc-800 shadow-2xl">
+                                {step === 1 && (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                            <CalendarIcon className="text-yellow-600" /> Выберите дату
+                                        </h3>
+                                        <input 
+                                            type="date" 
+                                            min={new Date().toISOString().split('T')[0]}
+                                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-yellow-600"
+                                            value={selectedDate}
+                                            onChange={(e) => setSelectedDate(e.target.value)}
+                                        />
+                                        <button 
+                                            disabled={!selectedDate}
+                                            onClick={() => setStep(2)}
+                                            className="w-full bg-yellow-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-4 rounded-xl transition"
+                                        >
+                                            Далее
+                                        </button>
+                                    </div>
+                                )}
+
+                                {step === 2 && (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-xl font-bold flex items-center gap-2">
+                                                <Clock className="text-yellow-600" /> Выберите время
+                                            </h3>
+                                            <button onClick={() => setStep(1)} className="text-zinc-500 text-sm hover:text-white">Назад</button>
+                                        </div>
+                                        <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                                            {allTimeSlots.map(time => {
+                                                const isBooked = isSlotBooked(selectedDate, time);
+                                                return (
+                                                    <button 
+                                                        key={time}
+                                                        disabled={isBooked}
+                                                        onClick={() => setSelectedTime(time)}
+                                                        className={`p-3 rounded-lg border font-medium transition ${
+                                                            isBooked 
+                                                                ? 'bg-zinc-900 border-zinc-900 text-zinc-700 cursor-not-allowed line-through' 
+                                                                : selectedTime === time 
+                                                                    ? 'bg-yellow-600 border-yellow-600 text-white' 
+                                                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-yellow-600'
+                                                        }`}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                        <button 
+                                            disabled={!selectedTime}
+                                            onClick={() => setStep(3)}
+                                            className="w-full bg-yellow-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-4 rounded-xl transition mt-6"
+                                        >
+                                            Далее
+                                        </button>
+                                    </div>
+                                )}
+
+                                {step === 3 && (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-xl font-bold">Ваши контакты</h3>
+                                            <button onClick={() => setStep(2)} className="text-zinc-500 text-sm hover:text-white">Назад</button>
+                                        </div>
+                                        
+                                        <div className="bg-zinc-900 p-4 rounded-xl mb-6 border border-zinc-800">
+                                            <div className="text-sm text-zinc-400">Стрижка (30 мин) • 400 сом</div>
+                                            <div className="font-bold">{selectedDate.split('-').reverse().join('.')} в {selectedTime}</div>
+                                        </div>
+
+                                        <input 
+                                            type="text" 
+                                            placeholder="Ваше имя" 
+                                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-yellow-600"
+                                            value={clientName}
+                                            onChange={(e) => setClientName(e.target.value)}
+                                        />
+                                        <input 
+                                            type="tel" 
+                                            placeholder="Номер телефона" 
+                                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-yellow-600"
+                                            value={clientPhone}
+                                            onChange={(e) => setClientPhone(e.target.value)}
+                                        />
+                                        <button 
+                                            disabled={!clientName || !clientPhone}
+                                            onClick={handleBooking}
+                                            className="w-full bg-white text-black disabled:bg-zinc-800 disabled:text-zinc-600 font-bold py-4 rounded-xl transition text-lg"
+                                        >
+                                            Подтвердить запись
+                                        </button>
+                                    </div>
+                                )}
+
+                                {step === 4 && (
+                                    <div className="text-center py-10 animate-fade-in">
+                                        <div className="w-20 h-20 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <CheckCircle2 className="w-10 h-10 text-yellow-500" />
+                                        </div>
+                                        <h3 className="text-3xl font-bold mb-2">Вы успешно записаны!</h3>
+                                        <p className="text-zinc-400 mb-6">Ждем вас по адресу: ул. Омурова Ишенбека, 28</p>
+                                        
+                                        <div className="bg-zinc-900 rounded-2xl p-6 text-left max-w-sm mx-auto mb-8 border border-zinc-800">
+                                            <div className="mb-4">
+                                                <div className="text-zinc-500 text-sm">Услуга</div>
+                                                <div className="font-bold text-lg">Мужская стрижка</div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <div className="text-zinc-500 text-sm">Дата</div>
+                                                    <div className="font-bold">{selectedDate.split('-').reverse().join('.')}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-zinc-500 text-sm">Время</div>
+                                                    <div className="font-bold text-yellow-500">{selectedTime}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button 
+                                            onClick={() => { setStep(1); setSelectedDate(""); setSelectedTime(""); setClientName(""); setClientPhone(""); }}
+                                            className="text-yellow-600 font-medium hover:text-yellow-500 transition"
+                                        >
+                                            Сделать еще одну запись
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Contacts */}
+                    <section id="contacts" className="py-20 px-6">
+                        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12">
+                            <div>
+                                <h2 className="text-4xl font-black mb-8 uppercase">Контакты</h2>
+                                <div className="space-y-6 text-lg">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center text-yellow-600">
+                                            <MapPin className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <div className="text-zinc-500 text-sm">Адрес</div>
+                                            <div className="font-medium">Улица Омурова Ишенбека, 28</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center text-yellow-600">
+                                            <Icon className="w-5 h-5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></Icon>
+                                        </div>
+                                        <div>
+                                            <div className="text-zinc-500 text-sm">Телефон (WhatsApp)</div>
+                                            <a href="tel:+996501029661" className="font-medium hover:text-yellow-500">+996 501 029 661</a>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center text-yellow-600">
+                                            <Clock className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <div className="text-zinc-500 text-sm">Режим работы</div>
+                                            <div className="font-medium">10:00 - 21:00 (Обед 12:00 - 13:00)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="h-80 bg-zinc-900 rounded-3xl border border-zinc-800 overflow-hidden flex items-center justify-center">
+                                <span className="text-zinc-600">Место для карты (2GIS / Google Maps)</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Footer */}
+                    <footer className="border-t border-zinc-900 py-8 px-6 text-center text-zinc-600">
+                        <p className="mb-4">© 2024 Barbershop Street. Все права защищены.</p>
+                        <button onClick={() => setShowAdmin(true)} className="inline-flex items-center gap-2 text-sm text-zinc-700 hover:text-yellow-600 transition">
+                            <Shield className="w-4 h-4" /> Панель администратора
+                        </button>
+                    </footer>
+                </div>
+            );
+        };
+
+        // Запуск приложения
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
